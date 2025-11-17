@@ -4,7 +4,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { Sale, Product, Customer, Purchase } from '../types';
 import { SendIcon, SparklesIcon } from '../utils/icons';
 import Button from './ui/Button';
-import { getAiResponse } from '../utils/ai';
+import { getAiResponse, ApiKeyNotFoundError } from '../utils/ai';
 
 interface AIAnalystModalProps {
   isOpen: boolean;
@@ -26,6 +26,7 @@ const AIAnalystModal: React.FC<AIAnalystModalProps> = ({ isOpen, onClose, sales,
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [apiKeyStatus, setApiKeyStatus] = useState<'checking' | 'selected' | 'not_selected'>('checking');
 
   useEffect(() => {
     // Scroll to the bottom of the chat when new messages are added
@@ -33,8 +34,18 @@ const AIAnalystModal: React.FC<AIAnalystModalProps> = ({ isOpen, onClose, sales,
   }, [messages]);
 
   useEffect(() => {
-    // Reset the chat when the modal is opened
+    // Reset the chat and check for API key when the modal is opened
     if (isOpen) {
+      const checkKey = async () => {
+        setApiKeyStatus('checking');
+        if (window.aistudio && (await window.aistudio.hasSelectedApiKey())) {
+          setApiKeyStatus('selected');
+        } else {
+          setApiKeyStatus('not_selected');
+        }
+      };
+
+      checkKey();
       setMessages([]);
       setIsLoading(false);
       setCurrentQuestion('');
@@ -54,10 +65,23 @@ const AIAnalystModal: React.FC<AIAnalystModalProps> = ({ isOpen, onClose, sales,
       const responseText = await getAiResponse(question, dataContext);
       setMessages(prev => [...prev, { sender: 'ai', text: responseText }]);
     } catch (error) {
-      console.error(error);
-      setMessages(prev => [...prev, { sender: 'ai', text: t('aiError') }]);
+      if (error instanceof ApiKeyNotFoundError) {
+        setApiKeyStatus('not_selected');
+        setMessages(prev => [...prev, { sender: 'ai', text: t('aiInvalidKeyError') }]);
+      } else {
+        console.error(error);
+        setMessages(prev => [...prev, { sender: 'ai', text: t('aiError') }]);
+      }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSelectKey = async () => {
+    if (window.aistudio) {
+        await window.aistudio.openSelectKey();
+        // Assume success and update status to show the chat UI
+        setApiKeyStatus('selected');
     }
   };
 
@@ -69,71 +93,94 @@ const AIAnalystModal: React.FC<AIAnalystModalProps> = ({ isOpen, onClose, sales,
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t('aiAnalystTitle')}>
-      <div className="flex flex-col h-[60vh] md:h-[70vh]">
-        {/* Chat Area */}
-        <div className="flex-grow overflow-y-auto pr-2 space-y-4">
-          {/* Welcome Message */}
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-primary-100 text-primary-600 rounded-full">
-                <SparklesIcon className="w-6 h-6" />
-            </div>
-            <div className="bg-slate-100 p-3 rounded-lg rounded-tl-none">
-              <p className="text-sm">{t('aiWelcomeMessage')}</p>
-            </div>
-          </div>
+        {apiKeyStatus === 'checking' && (
+           <div className="flex flex-col items-center justify-center h-[60vh] md:h-[70vh]">
+             <p className="italic text-slate-500">{t('aiLoading')}</p>
+           </div>
+        )}
 
-          {/* Chat Messages */}
-          {messages.map((msg, index) => (
-            <div key={index} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-              {msg.sender === 'ai' && (
-                 <div className="p-2 bg-primary-100 text-primary-600 rounded-full">
-                    <SparklesIcon className="w-6 h-6" />
-                 </div>
-              )}
-               <div className={`p-3 rounded-lg max-w-sm ${msg.sender === 'user' ? 'bg-primary-600 text-white rounded-br-none' : 'bg-slate-100 rounded-tl-none'}`}>
-                 <div className="prose prose-sm" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br />') }}></div>
-               </div>
+        {apiKeyStatus === 'not_selected' && (
+           <div className="flex flex-col items-center justify-center h-[60vh] md:h-[70vh] text-center p-4">
+              <SparklesIcon className="w-12 h-12 text-primary-400 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">{t('aiEnableTitle')}</h3>
+              <p className="text-slate-600 mb-4 max-w-sm">{t('aiEnableMessage')}</p>
+              <p className="text-sm text-slate-500 mb-6">
+                {t('aiBillingInfo1')}{' '}
+                <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="underline text-primary hover:text-primary-700">
+                  {t('aiBillingInfo2')}
+                </a>.
+              </p>
+              <Button onClick={handleSelectKey}>{t('aiEnableButton')}</Button>
             </div>
-          ))}
+        )}
 
-          {isLoading && (
-            <div className="flex items-start gap-3">
-                <div className="p-2 bg-primary-100 text-primary-600 rounded-full animate-pulse">
+        {apiKeyStatus === 'selected' && (
+          <div className="flex flex-col h-[60vh] md:h-[70vh]">
+            {/* Chat Area */}
+            <div className="flex-grow overflow-y-auto pr-2 space-y-4">
+              {/* Welcome Message */}
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-primary-100 text-primary-600 rounded-full">
                     <SparklesIcon className="w-6 h-6" />
                 </div>
                 <div className="bg-slate-100 p-3 rounded-lg rounded-tl-none">
-                    <p className="text-sm italic">{t('aiLoading')}</p>
+                  <p className="text-sm">{t('aiWelcomeMessage')}</p>
                 </div>
+              </div>
+
+              {/* Chat Messages */}
+              {messages.map((msg, index) => (
+                <div key={index} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
+                  {msg.sender === 'ai' && (
+                    <div className="p-2 bg-primary-100 text-primary-600 rounded-full">
+                        <SparklesIcon className="w-6 h-6" />
+                    </div>
+                  )}
+                  <div className={`p-3 rounded-lg max-w-sm ${msg.sender === 'user' ? 'bg-primary-600 text-white rounded-br-none' : 'bg-slate-100 rounded-tl-none'}`}>
+                    <div className="prose prose-sm" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br />') }}></div>
+                  </div>
+                </div>
+              ))}
+
+              {isLoading && (
+                <div className="flex items-start gap-3">
+                    <div className="p-2 bg-primary-100 text-primary-600 rounded-full animate-pulse">
+                        <SparklesIcon className="w-6 h-6" />
+                    </div>
+                    <div className="bg-slate-100 p-3 rounded-lg rounded-tl-none">
+                        <p className="text-sm italic">{t('aiLoading')}</p>
+                    </div>
+                </div>
+              )}
+
+              <div ref={chatEndRef} />
             </div>
-          )}
 
-          <div ref={chatEndRef} />
-        </div>
-
-        {/* Input Area */}
-        <div className="pt-4 border-t mt-4">
-            <div className="flex flex-wrap gap-2 mb-3">
-                {quickQuestions.map((q, i) => (
-                    <Button key={i} size="sm" variant="secondary" onClick={() => handleSendQuestion(q)} disabled={isLoading}>
-                        {q}
+            {/* Input Area */}
+            <div className="pt-4 border-t mt-4">
+                <div className="flex flex-wrap gap-2 mb-3">
+                    {quickQuestions.map((q, i) => (
+                        <Button key={i} size="sm" variant="secondary" onClick={() => handleSendQuestion(q)} disabled={isLoading}>
+                            {q}
+                        </Button>
+                    ))}
+                </div>
+                <form onSubmit={(e) => { e.preventDefault(); handleSendQuestion(currentQuestion); }} className="flex items-center gap-2">
+                    <input
+                    type="text"
+                    value={currentQuestion}
+                    onChange={(e) => setCurrentQuestion(e.target.value)}
+                    placeholder={t('typeYourQuestion')}
+                    className="flex-grow block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                    disabled={isLoading}
+                    />
+                    <Button type="submit" disabled={isLoading || !currentQuestion.trim()}>
+                        <SendIcon className="w-5 h-5" />
                     </Button>
-                ))}
+                </form>
             </div>
-            <form onSubmit={(e) => { e.preventDefault(); handleSendQuestion(currentQuestion); }} className="flex items-center gap-2">
-                <input
-                type="text"
-                value={currentQuestion}
-                onChange={(e) => setCurrentQuestion(e.target.value)}
-                placeholder={t('typeYourQuestion')}
-                className="flex-grow block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                disabled={isLoading}
-                />
-                <Button type="submit" disabled={isLoading || !currentQuestion.trim()}>
-                    <SendIcon className="w-5 h-5" />
-                </Button>
-            </form>
-        </div>
-      </div>
+          </div>
+        )}
     </Modal>
   );
 };
