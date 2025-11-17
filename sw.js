@@ -1,5 +1,5 @@
 // sw.js
-const CACHE_NAME = 'smart-kido-cache-v30'; // Updated version to force refresh
+const CACHE_NAME = 'smart-kido-cache-v31'; // Updated version to force refresh
 
 // App shell files to cache on install.
 // This list is simplified to be more robust. Caching only essentials ensures the SW installs successfully.
