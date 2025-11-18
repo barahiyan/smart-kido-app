@@ -1,3 +1,4 @@
+
 // This file encapsulates the logic for interacting with the Google AI SDK.
 // It uses dynamic import() to load the library only when needed,
 // which is crucial for preventing the app from crashing on startup.
@@ -16,7 +17,7 @@ export async function getAiResponse(prompt: string, dataContext: string): Promis
     
         // The API key is injected by the environment and must be present.
         if (!process.env.API_KEY) {
-            return "Ufunguo wa API (API Key) haupatikani. Tafadhali chagua moja ili uendelee.";
+            throw new ApiKeyNotFoundError("API Key not found in process.env");
         }
 
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -41,7 +42,7 @@ export async function getAiResponse(prompt: string, dataContext: string): Promis
             contents: fullPrompt,
         });
 
-        return response.text;
+        return response.text || "Samahani, sikuweza kupata jibu.";
 
     } catch (error) {
         console.error("Error getting AI response:", error);
@@ -49,7 +50,7 @@ export async function getAiResponse(prompt: string, dataContext: string): Promis
              // Throw the custom error to be handled by the UI.
             throw new ApiKeyNotFoundError("API Key is invalid or not found.");
         }
-        // Provide a user-friendly error message in Swahili.
-        return "Samahani, tatizo la mtandao au la kimfumo limetokea. Tafadhali jaribu tena baada ya muda mfupi.";
+        // For any other error, including ApiKeyNotFoundError, re-throw it to be handled by the UI.
+        throw error;
     }
 }
