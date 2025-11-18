@@ -1,11 +1,12 @@
-import React, { useState, useMemo, useEffect } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import Select from './ui/Select';
-import { PlusIcon, TrashIcon } from '../utils/icons';
+import { PlusIcon, TrashIcon, ContactsIcon } from '../utils/icons';
 import type { Customer } from '../types';
 import CustomerDetail from './CustomerDetail';
 
@@ -16,6 +17,33 @@ export const CustomerForm: React.FC<{onClose: () => void, customer?: Customer | 
   const [address, setAddress] = useState(customer?.address || '');
   const [paymentType, setPaymentType] = useState<'Cash' | 'Credit'>(customer?.paymentType || 'Credit');
   const [notes, setNotes] = useState(customer?.notes || '');
+
+  const handleContactSelect = async () => {
+    // Check if the API is supported
+    if (!('contacts' in navigator && 'ContactsManager' in window)) {
+      alert(t('contactPickerNotSupported'));
+      return;
+    }
+
+    try {
+      const props = ['name', 'tel'];
+      const opts = { multiple: false };
+      // @ts-ignore - navigator.contacts is experimental
+      const contacts = await navigator.contacts.select(props, opts);
+      
+      if (contacts.length) {
+        const contact = contacts[0];
+        if (contact.name && contact.name.length > 0) {
+          setName(contact.name[0]);
+        }
+        if (contact.tel && contact.tel.length > 0) {
+          setPhone(contact.tel[0]);
+        }
+      }
+    } catch (ex) {
+      console.log("Contact selection failed or cancelled", ex);
+    }
+  };
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +63,16 @@ export const CustomerForm: React.FC<{onClose: () => void, customer?: Customer | 
         label={t('phone')} 
         value={phone} 
         onChange={e => setPhone(e.target.value)} 
+        endAdornment={
+            <button
+              type="button"
+              onClick={handleContactSelect}
+              className="p-2 text-slate-400 hover:text-primary-600 focus:outline-none"
+              title={t('selectContact')}
+            >
+              <ContactsIcon className="w-5 h-5" />
+            </button>
+        }
       />
       <Input id="address" label={t('address')} value={address} onChange={e => setAddress(e.target.value)} />
       <Select id="paymentType" label={t('paymentType')} value={paymentType} onChange={e => setPaymentType(e.target.value as 'Cash' | 'Credit')}>
