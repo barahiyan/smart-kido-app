@@ -1,3 +1,4 @@
+
 export const translations = {
   en: {
     appName: "Smart Kido Sales Record",
@@ -179,7 +180,9 @@ export const translations = {
     aiEnableButton: "Select API Key",
     aiBillingInfo1: "For billing information, please see the",
     aiBillingInfo2: "Gemini API billing documentation",
-    aiInvalidKeyError: "Your API Key seems to be invalid. Please select a new one.",
+    aiInvalidKeyError: "The AI service returned an error. Your API key might be invalid or there could be a temporary issue.",
+    aiConfigErrorTitle: "AI Setup Required",
+    aiConfigErrorMessage: "The API Key is missing. Please go to your Netlify Site Settings > Environment Variables and add a key named 'API_KEY' with your Google AI Studio key as the value.",
   },
   sw: {
     appName: "Rekodi ya Mauzo ya Smart Kido",
@@ -356,11 +359,13 @@ export const translations = {
     aiQuickQuestion2: "Ni bidhaa gani inanipa faida kubwa zaidi?",
     aiQuickQuestion3: "Nipe muhtasari wa mauzo ya wiki iliyopita.",
     typeYourQuestion: "Andika swali lako hapa...",
-    aiEnableTitle: "Washa Mchambuzi wako wa AI",
-    aiEnableMessage: "Ili kutumia kipengele hiki, unahitaji kuchagua API key. Hii itaruhusu programu kuwasiliana na Google AI.",
-    aiEnableButton: "Chagua API Key",
-    aiBillingInfo1: "Kwa maelezo ya malipo, tafadhali angalia",
-    aiBillingInfo2: "nyaraka za malipo za Gemini API",
-    aiInvalidKeyError: "API Key yako inaonekana si sahihi. Tafadhali chagua mpya.",
+    aiEnableTitle: "Usanidi wa AI Unahitajika",
+    aiEnableMessage: "Tafadhali weka API Key kwanza.",
+    aiEnableButton: "",
+    aiBillingInfo1: "",
+    aiBillingInfo2: "",
+    aiInvalidKeyError: "Huduma ya AI imerudisha hitilafu. API key yako inaweza kuwa si sahihi.",
+    aiConfigErrorTitle: "Usanidi wa AI Unahitajika",
+    aiConfigErrorMessage: "API Key haipo. Tafadhali nenda kwenye Netlify > Site Settings > Environment Variables na uweke key yenye jina 'API_KEY' na thamani iwe hiyo kodi yako ya Google AI.",
   },
 };
