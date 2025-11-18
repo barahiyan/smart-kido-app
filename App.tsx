@@ -11,19 +11,20 @@ import Settings from './components/Settings';
 import Suppliers from './components/Suppliers';
 import Purchases from './components/Purchases';
 import type { Page } from './types';
+import useLocalStorage from './hooks/useLocalStorage';
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [user, setUser] = useState<string | null>(null);
+  // Use useLocalStorage for the user state so it persists across reloads
+  const [user, setUser] = useLocalStorage<string | null>('app-user', null);
   const [page, setPage] = useState<Page>('dashboard');
 
+  const isAuthenticated = !!user;
+
   const handleLogin = (username: string) => {
-    setIsAuthenticated(true);
     setUser(username);
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
     setUser(null);
   };
 
