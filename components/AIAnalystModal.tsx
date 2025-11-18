@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from './ui/Modal';
 import { useAppContext } from '../contexts/AppContext';
@@ -25,8 +26,8 @@ const AIAnalystModal: React.FC<AIAnalystModalProps> = ({ isOpen, onClose, sales,
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isConfigured, setIsConfigured] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const [apiKeyStatus, setApiKeyStatus] = useState<'checking' | 'selected' | 'not_selected'>('checking');
 
   useEffect(() => {
     // Scroll to the bottom of the chat when new messages are added
@@ -34,18 +35,14 @@ const AIAnalystModal: React.FC<AIAnalystModalProps> = ({ isOpen, onClose, sales,
   }, [messages]);
 
   useEffect(() => {
-    // Reset the chat and check for API key when the modal is opened
+    // Reset the chat when the modal is opened and check for API key
     if (isOpen) {
-      const checkKey = async () => {
-        setApiKeyStatus('checking');
-        if (window.aistudio && (await window.aistudio.hasSelectedApiKey())) {
-          setApiKeyStatus('selected');
-        } else {
-          setApiKeyStatus('not_selected');
-        }
-      };
-
-      checkKey();
+      // Check if API_KEY is available in the environment
+      if (!process.env.API_KEY) {
+        setIsConfigured(false);
+      } else {
+        setIsConfigured(true);
+      }
       setMessages([]);
       setIsLoading(false);
       setCurrentQuestion('');
@@ -66,7 +63,6 @@ const AIAnalystModal: React.FC<AIAnalystModalProps> = ({ isOpen, onClose, sales,
       setMessages(prev => [...prev, { sender: 'ai', text: responseText }]);
     } catch (error) {
       if (error instanceof ApiKeyNotFoundError) {
-        setApiKeyStatus('not_selected');
         setMessages(prev => [...prev, { sender: 'ai', text: t('aiInvalidKeyError') }]);
       } else {
         console.error(error);
@@ -77,110 +73,96 @@ const AIAnalystModal: React.FC<AIAnalystModalProps> = ({ isOpen, onClose, sales,
     }
   };
 
-  const handleSelectKey = async () => {
-    if (window.aistudio) {
-        await window.aistudio.openSelectKey();
-        // Assume success and update status to show the chat UI
-        setApiKeyStatus('selected');
-    }
-  };
-
   const quickQuestions = [
     t('aiQuickQuestion1'),
     t('aiQuickQuestion2'),
     t('aiQuickQuestion3'),
   ];
 
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t('aiAnalystTitle')}>
-        {apiKeyStatus === 'checking' && (
-           <div className="flex flex-col items-center justify-center h-[60vh] md:h-[70vh]">
-             <p className="italic text-slate-500">{t('aiLoading')}</p>
-           </div>
-        )}
+  const NotConfiguredView = () => (
+    <div className="flex flex-col items-center justify-center h-full text-center p-4">
+        <div className="p-4 bg-red-100 text-red-600 rounded-full mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+        </div>
+        <h3 className="text-xl font-bold text-dark">{t('aiConfigErrorTitle')}</h3>
+        <p className="mt-2 text-slate-600 max-w-md">{t('aiConfigErrorMessage')}</p>
+        <Button onClick={onClose} variant="secondary" className="mt-6">{t('close')}</Button>
+    </div>
+  );
 
-        {apiKeyStatus === 'not_selected' && (
-           <div className="flex flex-col items-center justify-center h-[60vh] md:h-[70vh] text-center p-4">
-              <SparklesIcon className="w-12 h-12 text-primary-400 mb-4" />
-              <h3 className="text-xl font-semibold mb-2">{t('aiEnableTitle')}</h3>
-              <p className="text-slate-600 mb-4 max-w-sm">{t('aiEnableMessage')}</p>
-              <p className="text-sm text-slate-500 mb-6">
-                {t('aiBillingInfo1')}{' '}
-                <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="underline text-primary hover:text-primary-700">
-                  {t('aiBillingInfo2')}
-                </a>.
-              </p>
-              <Button onClick={handleSelectKey}>{t('aiEnableButton')}</Button>
+  const ChatView = () => (
+     <div className="flex flex-col h-[60vh] md:h-[70vh]">
+        {/* Chat Area */}
+        <div className="flex-grow overflow-y-auto pr-2 space-y-4">
+        {/* Welcome Message */}
+        <div className="flex items-start gap-3">
+            <div className="p-2 bg-primary-100 text-primary-600 rounded-full">
+                <SparklesIcon className="w-6 h-6" />
             </div>
-        )}
+            <div className="bg-slate-100 p-3 rounded-lg rounded-tl-none">
+            <p className="text-sm">{t('aiWelcomeMessage')}</p>
+            </div>
+        </div>
 
-        {apiKeyStatus === 'selected' && (
-          <div className="flex flex-col h-[60vh] md:h-[70vh]">
-            {/* Chat Area */}
-            <div className="flex-grow overflow-y-auto pr-2 space-y-4">
-              {/* Welcome Message */}
-              <div className="flex items-start gap-3">
+        {/* Chat Messages */}
+        {messages.map((msg, index) => (
+            <div key={index} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
+            {msg.sender === 'ai' && (
                 <div className="p-2 bg-primary-100 text-primary-600 rounded-full">
                     <SparklesIcon className="w-6 h-6" />
                 </div>
+            )}
+            <div className={`p-3 rounded-lg max-w-sm ${msg.sender === 'user' ? 'bg-primary-600 text-white rounded-br-none' : 'bg-slate-100 rounded-tl-none'}`}>
+                <div className="prose prose-sm" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br />') }}></div>
+            </div>
+            </div>
+        ))}
+
+        {isLoading && (
+            <div className="flex items-start gap-3">
+                <div className="p-2 bg-primary-100 text-primary-600 rounded-full animate-pulse">
+                    <SparklesIcon className="w-6 h-6" />
+                </div>
                 <div className="bg-slate-100 p-3 rounded-lg rounded-tl-none">
-                  <p className="text-sm">{t('aiWelcomeMessage')}</p>
+                    <p className="text-sm italic">{t('aiLoading')}</p>
                 </div>
-              </div>
-
-              {/* Chat Messages */}
-              {messages.map((msg, index) => (
-                <div key={index} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
-                  {msg.sender === 'ai' && (
-                    <div className="p-2 bg-primary-100 text-primary-600 rounded-full">
-                        <SparklesIcon className="w-6 h-6" />
-                    </div>
-                  )}
-                  <div className={`p-3 rounded-lg max-w-sm ${msg.sender === 'user' ? 'bg-primary-600 text-white rounded-br-none' : 'bg-slate-100 rounded-tl-none'}`}>
-                    <div className="prose prose-sm" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br />') }}></div>
-                  </div>
-                </div>
-              ))}
-
-              {isLoading && (
-                <div className="flex items-start gap-3">
-                    <div className="p-2 bg-primary-100 text-primary-600 rounded-full animate-pulse">
-                        <SparklesIcon className="w-6 h-6" />
-                    </div>
-                    <div className="bg-slate-100 p-3 rounded-lg rounded-tl-none">
-                        <p className="text-sm italic">{t('aiLoading')}</p>
-                    </div>
-                </div>
-              )}
-
-              <div ref={chatEndRef} />
             </div>
-
-            {/* Input Area */}
-            <div className="pt-4 border-t mt-4">
-                <div className="flex flex-wrap gap-2 mb-3">
-                    {quickQuestions.map((q, i) => (
-                        <Button key={i} size="sm" variant="secondary" onClick={() => handleSendQuestion(q)} disabled={isLoading}>
-                            {q}
-                        </Button>
-                    ))}
-                </div>
-                <form onSubmit={(e) => { e.preventDefault(); handleSendQuestion(currentQuestion); }} className="flex items-center gap-2">
-                    <input
-                    type="text"
-                    value={currentQuestion}
-                    onChange={(e) => setCurrentQuestion(e.target.value)}
-                    placeholder={t('typeYourQuestion')}
-                    className="flex-grow block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-                    disabled={isLoading}
-                    />
-                    <Button type="submit" disabled={isLoading || !currentQuestion.trim()}>
-                        <SendIcon className="w-5 h-5" />
-                    </Button>
-                </form>
-            </div>
-          </div>
         )}
+
+        <div ref={chatEndRef} />
+        </div>
+
+        {/* Input Area */}
+        <div className="pt-4 border-t mt-4">
+            <div className="flex flex-wrap gap-2 mb-3">
+                {quickQuestions.map((q, i) => (
+                    <Button key={i} size="sm" variant="secondary" onClick={() => handleSendQuestion(q)} disabled={isLoading}>
+                        {q}
+                    </Button>
+                ))}
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); handleSendQuestion(currentQuestion); }} className="flex items-center gap-2">
+                <input
+                type="text"
+                value={currentQuestion}
+                onChange={(e) => setCurrentQuestion(e.target.value)}
+                placeholder={t('typeYourQuestion')}
+                className="flex-grow block w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                disabled={isLoading}
+                />
+                <Button type="submit" disabled={isLoading || !currentQuestion.trim()}>
+                    <SendIcon className="w-5 h-5" />
+                </Button>
+            </form>
+        </div>
+    </div>
+  )
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={isConfigured ? t('aiAnalystTitle') : t('aiConfigErrorTitle')}>
+        {isConfigured ? <ChatView /> : <NotConfiguredView />}
     </Modal>
   );
 };
