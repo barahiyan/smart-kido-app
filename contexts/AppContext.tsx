@@ -1,5 +1,4 @@
 
-
 import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
 import { ProductCategory, type AppContextType, type Customer, type Language, type Sale, type Payment, type Product, type User, type Supplier, type Purchase, type AppDataBackup } from '../types';
 import { translations } from '../utils/translations';
@@ -269,7 +268,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPurchases([]);
   }
 
-  const exportData = () => {
+  const exportData = async () => {
     const backupData: AppDataBackup = {
       customers,
       sales,
@@ -278,12 +277,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       purchases
     };
     const jsonString = JSON.stringify(backupData, null, 2);
+    const fileName = `smart-kido-backup-${new Date().toISOString().split('T')[0]}.json`;
+    const file = new File([jsonString], fileName, { type: 'application/json' });
+
+    // Try sharing first if the browser supports it (Mobile/Supported Browsers)
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Smart Kido Backup',
+          text: 'Here is the backup file for Smart Kido Sales Record.'
+        });
+        return;
+      } catch (error) {
+        console.log('Error sharing', error);
+        // Fallback to download if share fails or is cancelled by user
+      }
+    }
+
+    // Fallback: Download Link (Desktop)
     const blob = new Blob([jsonString], { type: 'application/json' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    const date = new Date().toISOString().split('T')[0];
     link.setAttribute('href', url);
-    link.setAttribute('download', `smart-kido-backup-${date}.json`);
+    link.setAttribute('download', fileName);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
