@@ -81,6 +81,28 @@ const AIAnalystModal: React.FC<AIAnalystModalProps> = ({ isOpen, onClose, sales,
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={isConfigured ? t('aiAnalystTitle') : t('aiConfigErrorTitle')}>
+        <style>{`
+            .ai-message-content table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 0.5rem;
+                margin-bottom: 0.5rem;
+                font-size: 0.9em;
+            }
+            .ai-message-content th, .ai-message-content td {
+                border: 1px solid #cbd5e1;
+                padding: 0.5rem;
+                text-align: left;
+            }
+            .ai-message-content th {
+                background-color: #f1f5f9;
+                font-weight: 600;
+            }
+            .ai-message-content ul {
+                list-style-type: disc;
+                margin-left: 1.5rem;
+            }
+        `}</style>
         {!isConfigured ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-4">
                 <div className="p-4 bg-red-100 text-red-600 rounded-full mb-4">
@@ -98,7 +120,7 @@ const AIAnalystModal: React.FC<AIAnalystModalProps> = ({ isOpen, onClose, sales,
                 <div className="flex-grow overflow-y-auto pr-2 space-y-4">
                 {/* Welcome Message */}
                 <div className="flex items-start gap-3">
-                    <div className="p-2 bg-primary-100 text-primary-600 rounded-full">
+                    <div className="p-2 bg-primary-100 text-primary-600 rounded-full flex-shrink-0">
                         <SparklesIcon className="w-6 h-6" />
                     </div>
                     <div className="bg-slate-100 p-3 rounded-lg rounded-tl-none">
@@ -110,19 +132,20 @@ const AIAnalystModal: React.FC<AIAnalystModalProps> = ({ isOpen, onClose, sales,
                 {messages.map((msg, index) => (
                     <div key={index} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
                     {msg.sender === 'ai' && (
-                        <div className="p-2 bg-primary-100 text-primary-600 rounded-full">
+                        <div className="p-2 bg-primary-100 text-primary-600 rounded-full flex-shrink-0">
                             <SparklesIcon className="w-6 h-6" />
                         </div>
                     )}
-                    <div className={`p-3 rounded-lg max-w-sm ${msg.sender === 'user' ? 'bg-primary-600 text-white rounded-br-none' : 'bg-slate-100 rounded-tl-none'}`}>
-                        <div className="prose prose-sm" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br />') }}></div>
+                    <div className={`p-3 rounded-lg max-w-full ${msg.sender === 'user' ? 'bg-primary-600 text-white rounded-br-none' : 'bg-slate-100 rounded-tl-none overflow-x-auto'}`}>
+                        {/* We use dangerouslySetInnerHTML to render the HTML tables returned by the AI */}
+                        <div className="ai-message-content text-sm" dangerouslySetInnerHTML={{ __html: msg.text }}></div>
                     </div>
                     </div>
                 ))}
 
                 {isLoading && (
                     <div className="flex items-start gap-3">
-                        <div className="p-2 bg-primary-100 text-primary-600 rounded-full animate-pulse">
+                        <div className="p-2 bg-primary-100 text-primary-600 rounded-full animate-pulse flex-shrink-0">
                             <SparklesIcon className="w-6 h-6" />
                         </div>
                         <div className="bg-slate-100 p-3 rounded-lg rounded-tl-none">
