@@ -23,17 +23,23 @@ export async function getAiResponse(prompt: string, dataContext: string): Promis
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
         const fullPrompt = `
-        You are an expert business analyst for a small business in Tanzania.
-        Your responses MUST be in Swahili.
-        You will be given the business's data as a JSON string.
-        Based on this data, answer the user's question.
-        Provide insightful, helpful, and concise analysis.
-        Use Markdown for formatting, especially for lists or tables.
+        Wewe ni mchambuzi wa biashara wa 'Smart Kido'.
+        Jibu swali la mtumiaji kwa KISWAHILI fasaha.
 
-        Here is the business data:
+        MAAGIZO MUHIMU YA MPANGILIO (FORMATTING):
+        1. Jibu liwe FUPI na la MOJA KWA MOJA. Usiweke utangulizi mrefu au maelezo yasiyo ya lazima.
+        2. Usitumie nyota nyota (**). Tumia <b>tag ya bold</b> kwa vichwa vya habari tu.
+        3. Tumia HTML tags kupangilia jibu lako:
+           - Tumia <table>, <tr>, <th>, <td> kuonyesha data au namba. Weka border="1" kwenye table.
+           - Tumia <ul> na <li> kwa orodha.
+           - Tumia <p> kwa aya.
+           - Tumia <b> kwa msisitizo kwenye namba muhimu.
+        4. Ukilinganisha vitu au ukitoa ripoti ya mauzo, LAZIMA utumie JEDWALI (Table).
+
+        Data ya biashara ni hii hapa:
         ${dataContext}
 
-        Here is the user's question:
+        Swali la mtumiaji:
         "${prompt}"
         `;
 
