@@ -1,11 +1,10 @@
 
-
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import Button from './ui/Button';
 import Card from './ui/Card';
 import Modal from './ui/Modal';
-import { CustomerForm } from './Customers';
+import { CustomerForm } from './CustomerForm';
 import { DownloadIcon, TrashIcon } from '../utils/icons';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -158,9 +157,8 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack }) =
       return;
     }
 
-    // Temporarily make the element visible for rendering
     const originalClassName = pdfContainer.className;
-    pdfContainer.className = ''; // Remove 'hidden'
+    pdfContainer.className = ''; 
     pdfContainer.style.position = 'absolute';
     pdfContainer.style.left = '-9999px';
     pdfContainer.style.top = '0';
@@ -187,7 +185,6 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack }) =
       console.error("Error generating PDF:", error);
       alert('Failed to generate PDF.');
     } finally {
-      // Restore original state
       pdfContainer.className = originalClassName;
       pdfContainer.style.position = '';
       pdfContainer.style.left = '';
