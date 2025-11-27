@@ -2,7 +2,7 @@
 
 // Define a unique name for the cache.
 // IMPORTANT: Change this version number every time you update the app files.
-const CACHE_NAME = 'smart-kido-cache-v1.0.0';
+const CACHE_NAME = 'smart-kido-cache-v1.0.1';
 
 // A minimal list of files to cache on installation for the app to work offline.
 const urlsToCache = [
