@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { PlusIcon, EditIcon, TrashIcon } from '../utils/icons';
@@ -8,36 +7,16 @@ import Card from './ui/Card';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import Select from './ui/Select';
-import { ProductCategory, type Sale, type Customer } from '../types';
-
-const QuickCustomerForm: React.FC<{onCustomerCreate: (customer: Customer) => void}> = ({ onCustomerCreate }) => {
-    const { t, addCustomer } = useAppContext();
-    const [name, setName] = useState('');
-    const [phone, setPhone] = useState('');
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const newCustomerData = { name, phone, address: '', paymentType: 'Credit' as const, notes: '' };
-        const newCustomer = addCustomer(newCustomerData);
-        onCustomerCreate(newCustomer);
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="mt-4 p-4 border rounded-md space-y-3 bg-slate-50">
-            <h3 className="font-semibold">{t('createNewCustomer')}</h3>
-            <Input id="quick-name" label={t('name')} value={name} onChange={e => setName(e.target.value)} required />
-            <Input id="quick-phone" label={t('phone')} value={phone} onChange={e => setPhone(e.target.value)} />
-            <Button type="submit" size="sm">{t('save')}</Button>
-        </form>
-    );
-};
+import { type Sale, type Customer } from '../types';
+import { CustomerForm } from './CustomerForm';
+import { PaymentForm } from './PaymentForm';
 
 
 const SaleForm: React.FC<{onClose: () => void, sale?: Sale | null}> = ({ onClose, sale }) => {
     const { t, customers, products, addSale, updateSale, formatCurrency } = useAppContext();
     
     const [customerId, setCustomerId] = useState('');
-    const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
+    const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
     
     const [productId, setProductId] = useState('');
     const [quantity, setQuantity] = useState('');
@@ -63,7 +42,7 @@ const SaleForm: React.FC<{onClose: () => void, sale?: Sale | null}> = ({ onClose
     const totalAmount = Number(quantity) * Number(unitPrice);
     
     useEffect(() => {
-        if (selectedProduct && !sale) { // Only autofill for new sales
+        if (selectedProduct && !sale) { 
             setUnitPrice(String(selectedProduct.sellingPrice));
         }
     }, [selectedProduct, sale]);
@@ -71,17 +50,15 @@ const SaleForm: React.FC<{onClose: () => void, sale?: Sale | null}> = ({ onClose
     const handleCustomerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const value = e.target.value;
         if (value === 'new') {
-            setShowNewCustomerForm(true);
-            setCustomerId('');
+            setIsCustomerModalOpen(true);
         } else {
-            setShowNewCustomerForm(false);
             setCustomerId(value);
         }
     };
 
     const handleCustomerCreated = (newCustomer: Customer) => {
         setCustomerId(newCustomer.id);
-        setShowNewCustomerForm(false);
+        setIsCustomerModalOpen(false);
     }
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -111,84 +88,68 @@ const SaleForm: React.FC<{onClose: () => void, sale?: Sale | null}> = ({ onClose
     
     const originalStock = useMemo(() => {
         if (!selectedProduct) return 0;
-        // If editing, the original stock should include the quantity from the sale being edited
         return selectedProduct.stock + (sale && sale.productId === productId ? sale.quantity : 0);
     }, [selectedProduct, sale, productId]);
 
+    // Use spread operator to copy customers before sorting to avoid mutating state directly
+    const sortedCustomers = useMemo(() => {
+        return [...customers].sort((a,b) => a.name.localeCompare(b.name));
+    }, [customers]);
+
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <Select id="customer" label={t('customer')} value={customerId} onChange={handleCustomerChange} required>
-                <option value="" disabled>{t('selectCustomer')}</option>
-                {customers.sort((a,b) => a.name.localeCompare(b.name)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                <option value="new">{t('createNewCustomer')}</option>
-            </Select>
+        <>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                 <div className="flex items-end gap-2">
+                    <div className="flex-grow">
+                        <Select id="customer" label={t('customer')} value={customerId} onChange={handleCustomerChange} required>
+                            <option value="" disabled>{t('selectCustomer')}</option>
+                            {sortedCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            <option value="new" className="font-bold text-primary-600">+ {t('createNewCustomer')}</option>
+                        </Select>
+                    </div>
+                    <Button type="button" onClick={() => setIsCustomerModalOpen(true)} className="mb-[2px] px-3" title={t('addCustomer')}>
+                        <PlusIcon className="w-5 h-5" />
+                    </Button>
+                </div>
+                
+                <Select id="product" label={t('product')} value={productId} onChange={e => setProductId(e.target.value)} required>
+                    <option value="" disabled>{t('selectProduct')}</option>
+                    {products.filter(p => p.stock > 0 || (sale && p.id === sale.productId)).map(p => <option key={p.id} value={p.id}>{p.name} ({p.stock} {t('inStock')})</option>)}
+                </Select>
 
-            {showNewCustomerForm && <QuickCustomerForm onCustomerCreate={handleCustomerCreated} />}
-            
-            <Select id="product" label={t('product')} value={productId} onChange={e => setProductId(e.target.value)} required>
-                <option value="" disabled>{t('selectProduct')}</option>
-                {products.filter(p => p.stock > 0 || (sale && p.id === sale.productId)).map(p => <option key={p.id} value={p.id}>{p.name} ({p.stock} {t('inStock')})</option>)}
-            </Select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input 
+                      id="quantity" 
+                      label={t('quantity')} 
+                      type="number" 
+                      min="0" 
+                      max={originalStock}
+                      value={quantity} 
+                      onChange={e => setQuantity(e.target.value)} />
+                    <Input id="unitPrice" label={t('unitPrice')} type="number" min="0" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} />
+                </div>
+                 {selectedProduct && <p className="text-sm text-slate-500">{t('stockAvailable')}: {originalStock}</p>}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input 
-                  id="quantity" 
-                  label={t('quantity')} 
-                  type="number" 
-                  min="0" 
-                  max={originalStock}
-                  value={quantity} 
-                  onChange={e => setQuantity(e.target.value)} />
-                <Input id="unitPrice" label={t('unitPrice')} type="number" min="0" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} />
-            </div>
-             {selectedProduct && <p className="text-sm text-slate-500">{t('stockAvailable')}: {originalStock}</p>}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input id="totalAmount" label={t('totalAmount')} type="number" value={totalAmount || ''} readOnly className="bg-slate-100" />
+                  <Input id="saleDate" label={t('date')} type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+                </div>
+                
+                <Input id="amountPaid" label={t('amountPaid')} type="number" min="0" max={totalAmount} value={amountPaid} onChange={e => setAmountPaid(e.target.value)} disabled={!!sale} />
+                <p className="text-right font-semibold">{t('remainingBalance')}: {formatCurrency(totalAmount - Number(amountPaid))}</p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input id="totalAmount" label={t('totalAmount')} type="number" value={totalAmount || ''} readOnly className="bg-slate-100" />
-              <Input id="saleDate" label={t('date')} type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-            </div>
-            
-            <Input id="amountPaid" label={t('amountPaid')} type="number" min="0" max={totalAmount} value={amountPaid} onChange={e => setAmountPaid(e.target.value)} disabled={!!sale} />
-            <p className="text-right font-semibold">{t('remainingBalance')}: {formatCurrency(totalAmount - Number(amountPaid))}</p>
+                 <div className="flex justify-end space-x-3 pt-4">
+                    <Button type="button" variant="secondary" onClick={onClose}>{t('cancel')}</Button>
+                    <Button type="submit" disabled={!customerId || !productId || Number(quantity) <= 0 || Number(quantity) > originalStock }>{t('save')}</Button>
+                </div>
+            </form>
 
-             <div className="flex justify-end space-x-3 pt-4">
-                <Button type="button" variant="secondary" onClick={onClose}>{t('cancel')}</Button>
-                <Button type="submit" disabled={!customerId || !productId || Number(quantity) <= 0 || Number(quantity) > originalStock }>{t('save')}</Button>
-            </div>
-        </form>
+            <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} title={t('newCustomer')}>
+                 <CustomerForm onClose={() => setIsCustomerModalOpen(false)} onSuccess={handleCustomerCreated} />
+            </Modal>
+        </>
     );
 };
-
-export const PaymentForm: React.FC<{ sale: Sale; onClose: () => void }> = ({ sale, onClose }) => {
-    const { t, recordPayment, formatCurrency, products } = useAppContext();
-    const [amount, setAmount] = useState('');
-    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
-
-    const product = products.find(p => p.id === sale.productId);
-    const totalPaid = sale.payments.reduce((sum, p) => sum + p.amount, 0);
-    const balance = sale.totalAmount - totalPaid;
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        recordPayment(sale.id, { amount: Number(amount), date: new Date(paymentDate).toISOString() });
-        onClose();
-    }
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <p>{t('productName')}: <span className="font-semibold">{(product && product.name) || 'N/A'}</span></p>
-            <p>{t('remainingBalance')}: <span className="font-semibold text-red-500">{formatCurrency(balance)}</span></p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input id="paymentAmount" label={t('paymentAmount')} type="number" min="0" max={balance} value={amount} onChange={e => setAmount(e.target.value)} required/>
-              <Input id="paymentDate" label={t('paymentDate')} type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required />
-            </div>
-             <div className="flex justify-end space-x-3 pt-4">
-                <Button type="button" variant="secondary" onClick={onClose}>{t('cancel')}</Button>
-                <Button type="submit">{t('recordPayment')}</Button>
-            </div>
-        </form>
-    )
-}
 
 const Sales: React.FC = () => {
     const { t, sales, customers, products, formatCurrency, formatDate, deleteSale } = useAppContext();
