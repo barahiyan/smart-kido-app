@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { PlusIcon, EditIcon, TrashIcon } from '../utils/icons';
@@ -8,7 +7,8 @@ import Card from './ui/Card';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import Select from './ui/Select';
-import { Purchase, Supplier } from '../types';
+import { Purchase } from '../types';
+import { SupplierPaymentForm } from './SupplierPaymentForm';
 
 const PurchaseForm: React.FC<{onClose: () => void, purchase?: Purchase | null}> = ({ onClose, purchase }) => {
     const { t, products, suppliers, addPurchase, updatePurchase, formatCurrency } = useAppContext();
@@ -34,7 +34,6 @@ const PurchaseForm: React.FC<{onClose: () => void, purchase?: Purchase | null}> 
             const totalPaid = purchase.payments.reduce((sum, p) => sum + p.amount, 0);
             setAmountPaid(String(totalPaid));
         } else {
-            // Reset form for new purchase
             setProductId('');
             setQuantity('');
             setCostPrice('');
@@ -46,7 +45,7 @@ const PurchaseForm: React.FC<{onClose: () => void, purchase?: Purchase | null}> 
     }, [purchase]);
     
     useEffect(() => {
-        if (!purchase) { // Only auto-fill price for new entries
+        if (!purchase) { 
             const selectedProduct = products.find(p => p.id === productId);
             if (selectedProduct) {
                 setCostPrice(String(selectedProduct.costPrice));
@@ -71,11 +70,7 @@ const PurchaseForm: React.FC<{onClose: () => void, purchase?: Purchase | null}> 
         };
 
         if (purchase) {
-            const updatedPurchase: Purchase = {
-                ...purchase,
-                ...purchaseData,
-            }
-            updatePurchase(updatedPurchase);
+            updatePurchase({ ...purchase, ...purchaseData });
         } else {
             const newPurchase: Omit<Purchase, 'id'> = {
                 ...purchaseData,
@@ -87,11 +82,15 @@ const PurchaseForm: React.FC<{onClose: () => void, purchase?: Purchase | null}> 
         onClose();
     };
 
+    // Use spread operator to avoid mutating state
+    const sortedProducts = useMemo(() => [...products].sort((a,b) => a.name.localeCompare(b.name)), [products]);
+    const sortedSuppliers = useMemo(() => [...suppliers].sort((a,b) => a.name.localeCompare(b.name)), [suppliers]);
+
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <Select id="product" label={t('product')} value={productId} onChange={e => setProductId(e.target.value)} required>
                 <option value="" disabled>{t('selectProduct')}</option>
-                {products.sort((a,b) => a.name.localeCompare(b.name)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {sortedProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -120,7 +119,7 @@ const PurchaseForm: React.FC<{onClose: () => void, purchase?: Purchase | null}> 
                     <option value="">
                         {purchaseType === 'Credit' ? t('selectSupplier') : `${t('selectSupplier')} (${t('optional')})`}
                     </option>
-                    {[...suppliers].sort((a, b) => a.name.localeCompare(b.name)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {sortedSuppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </Select>
             </div>
             
@@ -139,37 +138,6 @@ const PurchaseForm: React.FC<{onClose: () => void, purchase?: Purchase | null}> 
         </form>
     );
 };
-
-export const SupplierPaymentForm: React.FC<{ purchase: Purchase; onClose: () => void }> = ({ purchase, onClose }) => {
-    const { t, recordSupplierPayment, formatCurrency, products } = useAppContext();
-    const [amount, setAmount] = useState('');
-    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
-
-    const product = products.find(p => p.id === purchase.productId);
-    const totalPaid = purchase.payments.reduce((sum, p) => sum + p.amount, 0);
-    const balance = purchase.totalAmount - totalPaid;
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        recordSupplierPayment(purchase.id, { amount: Number(amount), date: new Date(paymentDate).toISOString() });
-        onClose();
-    }
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <p>{t('productName')}: <span className="font-semibold">{(product && product.name) || 'N/A'}</span></p>
-            <p>{t('remainingBalance')}: <span className="font-semibold text-red-500">{formatCurrency(balance)}</span></p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input id="paymentAmount" label={t('paymentAmount')} type="number" min="0" max={balance} value={amount} onChange={e => setAmount(e.target.value)} required/>
-              <Input id="paymentDate" label={t('paymentDate')} type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required />
-            </div>
-             <div className="flex justify-end space-x-3 pt-4">
-                <Button type="button" variant="secondary" onClick={onClose}>{t('cancel')}</Button>
-                <Button type="submit">{t('recordPayment')}</Button>
-            </div>
-        </form>
-    )
-}
 
 const Purchases: React.FC = () => {
     const { t, purchases, products, suppliers, formatCurrency, formatDate, deletePurchase } = useAppContext();
