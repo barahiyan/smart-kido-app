@@ -1,13 +1,12 @@
 
-
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import { Purchase } from '../types';
 import Button from './ui/Button';
 import Card from './ui/Card';
 import Modal from './ui/Modal';
-import { SupplierForm } from './Suppliers';
-import { SupplierPaymentForm } from './Purchases';
+import { SupplierForm } from './SupplierForm';
+import { SupplierPaymentForm } from './SupplierPaymentForm';
 import { TrashIcon } from '../utils/icons';
 
 interface SupplierDetailProps {
