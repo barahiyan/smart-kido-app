@@ -9,7 +9,6 @@ import Products from './components/Products';
 import Settings from './components/Settings';
 import Suppliers from './components/Suppliers';
 import Purchases from './components/Purchases';
-import TestConnection from './components/TestConnection'; // Hii ndio tumeongeza
 import type { Page } from './types';
 import useLocalStorage from './hooks/useLocalStorage';
 
@@ -31,13 +30,7 @@ const App: React.FC = () => {
   const renderPage = () => {
     switch (page) {
       case 'dashboard':
-        return (
-          <>
-            {/* Tumeiweka hapa ili uione ukiwa Dashboard */}
-            <TestConnection />
-            <Dashboard />
-          </>
-        );
+        return <Dashboard />;
       case 'customers':
         return <Customers />;
       case 'sales':
