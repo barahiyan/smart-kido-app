@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../contexts/AppContext';
 import Button from './ui/Button';
 import Card from './ui/Card';
@@ -8,6 +7,11 @@ import { CustomerForm } from './CustomerForm';
 import { DownloadIcon, TrashIcon } from '../utils/icons';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { Customer, Sale, Product } from '../types';
+
+// Firebase Imports
+import { db } from '../firebase';
+import { doc, onSnapshot, collection, query, where, orderBy, deleteDoc, runTransaction } from 'firebase/firestore';
 
 interface CustomerDetailProps {
   customerId: string;
@@ -84,18 +88,59 @@ const StatementTable: React.FC<{
 
 
 const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack }) => {
-  const { t, customers, sales, products, getCustomerBalance, formatCurrency, formatDate, deleteCustomer, deletePayment } = useAppContext();
-  
+  const { t, formatCurrency, formatDate } = useAppContext();
+
+  // State za Firebase
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [paymentToDelete, setPaymentToDelete] = useState<{saleId: string, paymentId: string} | null>(null);
+  const [paymentToDelete, setPaymentToDelete] = useState<{ saleId: string, paymentId: string } | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const customer = customers.find(c => c.id === customerId);
-  const totalBalance = getCustomerBalance(customerId);
+  // 1. KUVUTA DATA KUTOKA FIREBASE (Mteja, Mauzo yake, na Bidhaa)
+  useEffect(() => {
+    setLoading(true);
+
+    // Vuta Mteja
+    const unsubCustomer = onSnapshot(doc(db, "wateja", customerId), (doc) => {
+      if (doc.exists()) {
+        setCustomer({ id: doc.id, ...doc.data() } as Customer);
+      } else {
+        setCustomer(null);
+      }
+    });
+
+    // Vuta Mauzo ya Mteja Huyu tu
+    const qSales = query(collection(db, "mauzo"), where("customerId", "==", customerId), orderBy("date", "asc"));
+    const unsubSales = onSnapshot(qSales, (snapshot) => {
+      setSales(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale)));
+    });
+
+    // Vuta Bidhaa (kwa ajili ya majina)
+    const unsubProducts = onSnapshot(collection(db, "bidhaa"), (snapshot) => {
+      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+      setLoading(false);
+    });
+
+    return () => { unsubCustomer(); unsubSales(); unsubProducts(); };
+  }, [customerId]);
+
+  // Kokotoa Jumla ya Deni (Total Balance)
+  const totalBalance = useMemo(() => {
+    if (!sales) return 0;
+    return sales.reduce((sum, sale) => {
+      const payments = sale.payments || [];
+      const paid = payments.reduce((pSum, p) => pSum + p.amount, 0);
+      return sum + (sale.totalAmount - paid);
+    }, 0);
+  }, [sales]);
 
   const statementRows: StatementRow[] = useMemo(() => {
-    if (!customer) return [];
+    if (!customer || !sales) return [];
 
     const transactions: {
       date: string;
@@ -107,31 +152,34 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack }) =
       paymentId?: string;
     }[] = [];
 
-    sales
-      .filter(s => s.customerId === customerId)
-      .forEach(sale => {
-        const product = products.find(p => p.id === sale.productId);
-        transactions.push({
-          date: sale.date,
-          description: `${(product && product.name) || 'N/A'} (${sale.quantity} x ${formatCurrency(sale.unitPrice)})`,
-          charge: sale.totalAmount,
-          payment: 0,
-          type: 'sale',
-          saleId: sale.id,
-        });
-        sale.payments.forEach(p => {
-          transactions.push({
-            date: p.date,
-            description: t('newPayment'),
-            charge: 0,
-            payment: p.amount,
-            type: 'payment',
-            saleId: sale.id,
-            paymentId: p.id
-          });
-        });
+    sales.forEach(sale => {
+      const product = products.find(p => p.id === sale.productId);
+      // Record Sale
+      transactions.push({
+        date: sale.date,
+        description: `${(product && product.name) || 'N/A'} (${sale.quantity} x ${formatCurrency(sale.unitPrice)})`,
+        charge: sale.totalAmount,
+        payment: 0,
+        type: 'sale',
+        saleId: sale.id,
       });
 
+      // Record Payments
+      const payments = sale.payments || [];
+      payments.forEach(p => {
+        transactions.push({
+          date: p.date,
+          description: t('newPayment'),
+          charge: 0,
+          payment: p.amount,
+          type: 'payment',
+          saleId: sale.id,
+          paymentId: p.id
+        });
+      });
+    });
+
+    // Panga kwa tarehe
     transactions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     let runningBalance = 0;
@@ -142,7 +190,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack }) =
         balance: runningBalance,
       };
     });
-  }, [customerId, sales, products, customer, formatCurrency, t]);
+  }, [customer, sales, products, formatCurrency, t]);
 
   const handleDownloadPdf = async () => {
     if (!customer) return;
@@ -158,26 +206,26 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack }) =
     }
 
     const originalClassName = pdfContainer.className;
-    pdfContainer.className = ''; 
+    pdfContainer.className = '';
     pdfContainer.style.position = 'absolute';
     pdfContainer.style.left = '-9999px';
     pdfContainer.style.top = '0';
     pdfContainer.style.zIndex = '-1';
 
     try {
-      const canvas = await html2canvas(pdfElement, { 
+      const canvas = await html2canvas(pdfElement, {
         scale: 2,
         useCORS: true,
       });
       const imgData = canvas.toDataURL('image/png');
-      
+
       const pdf = new jsPDF('p', 'mm', 'a4');
-      
+
       const canvasWidth = canvas.width;
       const canvasHeight = canvas.height;
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvasHeight * pdfWidth) / canvasWidth;
-      
+
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
       pdf.save(`Statement-${customer.name.replace(/\s/g, '_')}-${new Date().toISOString().split('T')[0]}.pdf`);
 
@@ -194,6 +242,10 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack }) =
     }
   };
 
+  if (loading) {
+    return <div className="text-center py-8">Inapakua taarifa za mteja...</div>;
+  }
+
   if (!customer) {
     return (
       <div>
@@ -203,18 +255,43 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack }) =
     );
   }
 
-  const handleDelete = () => {
+  // KUFUTA MTEJA (Firebase)
+  const handleDelete = async () => {
     if (customer) {
-      deleteCustomer(customer.id);
-      setShowDeleteConfirm(false);
-      onBack();
+      try {
+        await deleteDoc(doc(db, "wateja", customer.id));
+        setShowDeleteConfirm(false);
+        onBack();
+      } catch (error) {
+        console.error("Error deleting customer:", error);
+        alert("Imeshindikana kufuta mteja.");
+      }
     }
   }
 
-  const handleDeletePayment = () => {
-    if(paymentToDelete) {
-        deletePayment(paymentToDelete.saleId, paymentToDelete.paymentId);
+  // KUFUTA MALIPO (Firebase Transaction)
+  const handleDeletePayment = async () => {
+    if (paymentToDelete) {
+      try {
+        await runTransaction(db, async (transaction) => {
+          const saleRef = doc(db, "mauzo", paymentToDelete.saleId);
+          const saleDoc = await transaction.get(saleRef);
+          if (!saleDoc.exists()) throw "Sale not found";
+
+          const saleData = saleDoc.data();
+          const currentPayments = saleData.payments || [];
+
+          // Chuja malipo kuondoa lile tunalofuta
+          const updatedPayments = currentPayments.filter((p: any) => p.id !== paymentToDelete.paymentId);
+
+          // Update Firebase
+          transaction.update(saleRef, { payments: updatedPayments });
+        });
         setPaymentToDelete(null);
+      } catch (error) {
+        console.error("Error deleting payment:", error);
+        alert("Imeshindikana kufuta malipo.");
+      }
     }
   }
 
@@ -224,7 +301,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack }) =
         <Button onClick={onBack} variant="secondary">
           &larr; {t('backToCustomers')}
         </Button>
-         <Button onClick={handleDownloadPdf} disabled={isDownloading}>
+        <Button onClick={handleDownloadPdf} disabled={isDownloading}>
           <DownloadIcon className="mr-2 h-5 w-5" />
           {isDownloading ? t('downloading') : t('downloadPDF')}
         </Button>
@@ -232,55 +309,55 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack }) =
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
-            <Card title={t('customerDetails')}>
-                <div className="space-y-3">
-                    <div>
-                        <h4 className="text-sm text-slate-500">{t('name')}</h4>
-                        <p className="font-semibold text-lg">{customer.name}</p>
-                    </div>
-                     <div>
-                        <h4 className="text-sm text-slate-500">{t('phone')}</h4>
-                        <p className="font-semibold">{customer.phone}</p>
-                    </div>
-                    <div>
-                        <h4 className="text-sm text-slate-500">{t('address')}</h4>
-                        <p className="font-semibold">{customer.address || 'N/A'}</p>
-                    </div>
-                    <div>
-                        <h4 className="text-sm text-slate-500">{t('paymentType')}</h4>
-                        <p><span className={`px-2 py-1 text-xs font-semibold rounded-full ${customer.paymentType === 'Credit' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'}`}>
-                        {t(customer.paymentType.toLowerCase())}
-                      </span></p>
-                    </div>
-                    {customer.notes && (
-                        <div>
-                            <h4 className="text-sm text-slate-500">{t('notes')}</h4>
-                            <p className="font-semibold text-sm italic bg-slate-50 p-2 rounded">{customer.notes}</p>
-                        </div>
-                    )}
+          <Card title={t('customerDetails')}>
+            <div className="space-y-3">
+              <div>
+                <h4 className="text-sm text-slate-500">{t('name')}</h4>
+                <p className="font-semibold text-lg">{customer.name}</p>
+              </div>
+              <div>
+                <h4 className="text-sm text-slate-500">{t('phone')}</h4>
+                <p className="font-semibold">{customer.phone}</p>
+              </div>
+              <div>
+                <h4 className="text-sm text-slate-500">{t('address')}</h4>
+                <p className="font-semibold">{customer.address || 'N/A'}</p>
+              </div>
+              <div>
+                <h4 className="text-sm text-slate-500">{t('paymentType')}</h4>
+                <p><span className={`px-2 py-1 text-xs font-semibold rounded-full ${customer.paymentType === 'Credit' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'}`}>
+                  {t(customer.paymentType.toLowerCase())}
+                </span></p>
+              </div>
+              {customer.notes && (
+                <div>
+                  <h4 className="text-sm text-slate-500">{t('notes')}</h4>
+                  <p className="font-semibold text-sm italic bg-slate-50 p-2 rounded">{customer.notes}</p>
                 </div>
-                 <div className="mt-4 pt-4 border-t space-y-2">
-                    <Button onClick={() => setIsEditModalOpen(true)} className="w-full" variant="secondary">{t('editCustomer')}</Button>
-                    <Button onClick={() => setShowDeleteConfirm(true)} className="w-full" variant="danger">{t('delete')}</Button>
-                </div>
-            </Card>
+              )}
+            </div>
+            <div className="mt-4 pt-4 border-t space-y-2">
+              <Button onClick={() => setIsEditModalOpen(true)} className="w-full" variant="secondary">{t('editCustomer')}</Button>
+              <Button onClick={() => setShowDeleteConfirm(true)} className="w-full" variant="danger">{t('delete')}</Button>
+            </div>
+          </Card>
 
-             <Card>
-                <h4 className="text-slate-500 font-medium">{t('totalBalance')}</h4>
-                <p className={`text-4xl font-bold mt-2 ${totalBalance > 0 ? 'text-red-500' : 'text-green-600'}`}>
-                    {formatCurrency(totalBalance)}
-                </p>
-            </Card>
+          <Card>
+            <h4 className="text-slate-500 font-medium">{t('totalBalance')}</h4>
+            <p className={`text-4xl font-bold mt-2 ${totalBalance > 0 ? 'text-red-500' : 'text-green-600'}`}>
+              {formatCurrency(totalBalance)}
+            </p>
+          </Card>
         </div>
 
         <div className="lg:col-span-2">
-            <Card title={t('transactionHistory')}>
-                <StatementTable 
-                    rows={statementRows} 
-                    totalBalance={totalBalance} 
-                    onDeletePayment={(saleId, paymentId) => setPaymentToDelete({saleId, paymentId})}
-                />
-            </Card>
+          <Card title={t('transactionHistory')}>
+            <StatementTable
+              rows={statementRows}
+              totalBalance={totalBalance}
+              onDeletePayment={(saleId, paymentId) => setPaymentToDelete({ saleId, paymentId })}
+            />
+          </Card>
         </div>
       </div>
 
@@ -303,7 +380,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack }) =
               <p className={`font-bold text-2xl ${totalBalance > 0 ? 'text-red-500' : 'text-dark'}`}>{formatCurrency(totalBalance)}</p>
             </div>
           </div>
-          <StatementTable rows={statementRows} totalBalance={totalBalance} onDeletePayment={()=>{}} />
+          <StatementTable rows={statementRows} totalBalance={totalBalance} onDeletePayment={() => { }} />
         </div>
       </div>
 
@@ -322,7 +399,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack }) =
         </div>
       </Modal>
 
-       <Modal isOpen={!!paymentToDelete} onClose={() => setPaymentToDelete(null)} title={t('deleteConfirmation')}>
+      <Modal isOpen={!!paymentToDelete} onClose={() => setPaymentToDelete(null)} title={t('deleteConfirmation')}>
         <div>
           <p>{t('deletePaymentWarning')}</p>
           <div className="flex justify-end space-x-3 pt-4 mt-4">
