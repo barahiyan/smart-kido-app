@@ -62,7 +62,7 @@ export const PaymentForm: React.FC<{ sale: Sale; onClose: () => void }> = ({ sal
                 // 4. Update Firebase
                 transaction.update(saleRef, {
                     payments: updatedPayments,
-                    paymentType: newPaymentType,
+                    paymentType: newPaymentType, // Badilisha status kama deni limeisha
                     updatedAt: serverTimestamp()
                 });
             });
